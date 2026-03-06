@@ -1,0 +1,288 @@
+openapi: 3.0.3
+info:
+  title: Warm House System API
+  description: API контракт для взаимодействия микросервисов платформы "Тёплый дом".
+  version: 1.0.0
+servers:
+  - url: https://api.warmhouse.com/v1
+    description: Production API Gateway
+  - url: http://localhost:8081
+    description: Local Development Server
+
+paths:
+  # --- Asset Service Endpoints ---
+  /homes/{homeId}/rooms/{roomId}/devices:
+    post:
+      summary: Регистрация нового устройства
+      description: Добавляет новое устройство в конкретную комнату дома. (Asset Service)
+      tags:
+        - Assets
+      parameters:
+        - name: homeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: Устройство успешно создано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          description: Некорректные данные запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # --- Device Gateway Endpoints ---
+  /devices/{deviceId}:
+    get:
+      summary: Получение информации об устройстве
+      description: Возвращает текущее состояние и метаданные устройства. (Asset Service / Device Gateway)
+      tags:
+        - Assets
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Информация об устройстве
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          description: Устройство не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      summary: Обновление устройства
+      description: Обновляет метаданные или статус устройства.
+      tags:
+        - Assets
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: Устройство обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+
+  /devices/{deviceId}/commands:
+    post:
+      summary: Отправка команды на устройство
+      description: Синхронный запрос на управление устройством (например, включить свет). (Device Gateway)
+      tags:
+        - Control
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandPayload'
+      responses:
+        '202':
+          description: Команда принята в обработку
+        '200':
+          description: Команда выполнена успешно (для синхронных протоколов)
+        '404':
+          description: Устройство не найдено или оффлайн
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /devices/{deviceId}/telemetry:
+    get:
+      summary: Получение истории телеметрии
+      description: Запрашивает исторические данные измерений. (Device Gateway / Telemetry DB)
+      tags:
+        - Telemetry
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Список измерений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TelemetryPoint'
+
+  # --- Scenario Service Endpoints ---
+  /homes/{homeId}/scenarios:
+    post:
+      summary: Создание сценария автоматизации
+      description: Создает новое правило "Если... То...". (Scenario Service)
+      tags:
+        - Automation
+      parameters:
+        - name: homeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioCreate'
+      responses:
+        '201':
+          description: Сценарий создан
+        '400':
+          description: Ошибка валидации сценария
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: "Resource not found"
+        details:
+          type: string
+          nullable: true
+
+    DeviceCreate:
+      type: object
+      required:
+        - name
+        - serial_number
+        - type_id
+      properties:
+        name:
+          type: string
+          example: "Датчик температуры в гостиной"
+        serial_number:
+          type: string
+          example: "SN-12345678"
+        type_id:
+          type: string
+          format: uuid
+
+    DeviceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, error]
+
+    Device:
+      allOf:
+        - $ref: '#/components/schemas/DeviceCreate'
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [online, offline, error]
+
+    CommandPayload:
+      type: object
+      properties:
+        action:
+          type: string
+          example: "set_power"
+        params:
+          type: object
+          example: { "state": "on" }
+
+    TelemetryPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        value:
+          type: number
+        metric_type:
+          type: string
+          example: "temperature"
+
+    ScenarioCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        triggers:
+          type: array
+          items:
+            type: object
+        actions:
+          type: array
+          items:
+            type: object

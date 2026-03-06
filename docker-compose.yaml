@@ -1,0 +1,87 @@
+services:
+  # База данных для Smart Home
+  postgres:
+    image: postgres:16-alpine
+    container_name: smarthome-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: smarthome
+    ports:
+      - "5432:5432"
+    volumes:
+      # Путь скорректирован относительно корня проекта
+      - ./apps/smart_home/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smarthome-network
+    restart: unless-stopped
+
+  # Сервис эмуляции температуры
+  temperature-api:
+    build: ./apps/temperature-api
+    container_name: temperature-api
+    ports:
+      - "8081:8081"
+    networks:
+      - smarthome-network
+    restart: unless-stopped
+
+  # Основной монолит
+  app:
+    build:
+      context: ./apps/smart_home
+      dockerfile: Dockerfile
+    container_name: smarthome-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temperature-api:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/smarthome
+      - TEMPERATURE_API_URL=http://temperature-api:8081
+    ports:
+      - "8080:8080"
+    networks:
+      - smarthome-network
+    restart: unless-stopped
+    
+ # Сервис для OpenAPI (REST) - Swagger UI
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    container_name: warm-house-swagger
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./openapi.yaml:/openapi.yaml
+    environment:
+      SWAGGER_JSON: /openapi.yaml
+      DOC_EXPANSION: list
+    networks:
+      - smarthome-network
+
+  # Сервис для просмотра AsyncAPI (Client-side rendering)
+  asyncapi-ui:
+    image: nginx:alpine
+    container_name: warm-house-asyncapi
+    restart: unless-stopped
+    ports:
+      - "8083:80"
+    volumes:
+      - ./asyncapi.yaml:/usr/share/nginx/html/asyncapi.yaml
+      - ./asyncapi-index.html:/usr/share/nginx/html/index.html
+    networks:
+      - smarthome-network
+volumes:
+  postgres_data:
+
+networks:
+  smarthome-network:
+    driver: bridge

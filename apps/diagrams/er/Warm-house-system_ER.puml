@@ -1,0 +1,153 @@
+@startuml Warm-house-system_ER
+!theme plain
+hide circle
+skinparam linetype ortho
+
+' Domain: Identity & Access Management
+package "Identity & Access" {
+    entity "User" as user {
+        *id : UUID <<PK>>
+        --
+        email : VARCHAR(255)
+        password_hash : VARCHAR(255)
+        full_name : VARCHAR(100)
+        created_at : TIMESTAMP
+    }
+
+    entity "Role" as role {
+        *id : UUID <<PK>>
+        --
+        name : VARCHAR(50)
+        description : TEXT
+    }
+
+    entity "Permission" as permission {
+        *id : UUID <<PK>>
+        --
+        slug : VARCHAR(100)
+        description : TEXT
+    }
+
+    entity "User_Role" as user_role {
+        *user_id : UUID <<FK>>
+        *role_id : UUID <<FK>>
+    }
+
+    entity "Role_Permission" as role_permission {
+        *role_id : UUID <<FK>>
+        *permission_id : UUID <<FK>>
+    }
+}
+
+' Domain: Asset Registry
+package "Asset Registry" {
+    entity "Home" as home {
+        *id : UUID <<PK>>
+        --
+        *owner_id : UUID <<FK>>
+        name : VARCHAR(100)
+        address : TEXT
+        timezone : VARCHAR(50)
+    }
+
+    entity "Room" as room {
+        *id : UUID <<PK>>
+        --
+        *home_id : UUID <<FK>>
+        name : VARCHAR(100)
+        floor : INTEGER
+    }
+
+    entity "Device" as device {
+        *id : UUID <<PK>>
+        --
+        *room_id : UUID <<FK>>
+        *type_id : UUID <<FK>>
+        serial_number : VARCHAR(100)
+        name : VARCHAR(100)
+        status : VARCHAR(50)
+        is_online : BOOLEAN
+        last_seen : TIMESTAMP
+    }
+
+    entity "DeviceType" as device_type {
+        *id : UUID <<PK>>
+        --
+        manufacturer : VARCHAR(100)
+        model : VARCHAR(100)
+        protocol : VARCHAR(50)
+        capabilities : JSONB
+    }
+}
+
+' Domain: IoT Platform
+package "IoT Platform" {
+    entity "Telemetry" as telemetry {
+        *timestamp : TIMESTAMP <<PK>>
+        *device_id : UUID <<FK, PK>>
+        --
+        metric_type : VARCHAR(50)
+        value : DOUBLE PRECISION
+    }
+}
+
+' Domain: Automation & Logic
+package "Automation & Logic" {
+    entity "Scenario" as scenario {
+        *id : UUID <<PK>>
+        --
+        *home_id : UUID <<FK>>
+        name : VARCHAR(100)
+        description : TEXT
+        is_active : BOOLEAN
+        created_by : UUID <<FK>>
+    }
+
+    entity "Trigger" as trigger {
+        *id : UUID <<PK>>
+        --
+        *scenario_id : UUID <<FK>>
+        type : VARCHAR(50)
+        condition : JSONB
+    }
+
+    entity "Action" as action {
+        *id : UUID <<PK>>
+        --
+        *scenario_id : UUID <<FK>>
+        *target_device_id : UUID <<FK>>
+        command_payload : JSONB
+    }
+
+    entity "Notification" as notification {
+        *id : UUID <<PK>>
+        --
+        *user_id : UUID <<FK>>
+        message : TEXT
+        channel : VARCHAR(20)
+        status : VARCHAR(20)
+        created_at : TIMESTAMP
+    }
+}
+
+' Relationships
+user ||..o{ user_role
+role ||..o{ user_role
+role ||..o{ role_permission
+permission ||..o{ role_permission
+
+user ||--o{ home : "owns"
+home ||--o{ room : "contains"
+room ||--o{ device : "contains"
+device_type ||--o{ device : "defines"
+
+device ||--o{ telemetry : "generates"
+
+home ||--o{ scenario : "has"
+scenario ||--o{ trigger : "has"
+scenario ||--o{ action : "has"
+device ||--o{ action : "target of"
+
+user ||--o{ notification : "receives"
+
+@enduml

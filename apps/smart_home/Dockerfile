@@ -22,11 +22,20 @@ FROM alpine:latest
 # Install necessary runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata
 
+# Создаем непривилегированного пользователя и группу
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Set working directory
 WORKDIR /app
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/smarthome .
+
+# Меняем владельца файлов на нашего пользователя
+RUN chown -R appuser:appgroup /app
+
+# Переключаемся на непривилегированного пользователя
+USER appuser
 
 # Expose the port the app runs on
 EXPOSE 8080

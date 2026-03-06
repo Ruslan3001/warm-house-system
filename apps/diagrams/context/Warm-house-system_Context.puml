@@ -1,0 +1,47 @@
+@startuml Warm-house-system_Context_AsIs
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+' Заголовок диаграммы As-Is
+title Диаграмма контекста (As-Is): Монолитное приложение "Smart Home"
+
+' Акторы
+Person(user, "Пользователь", "Владелец дома, просматривает датчики.")
+
+' Система
+System(monolith, "Smart Home Monolith", "Монолитное Go-приложение для управления датчиками.")
+
+' Внешние системы
+System_Ext(temp_api, "Temperature API", "Внешний сервис для получения данных о температуре.")
+
+' Взаимодействия
+Rel(user, monolith, "Просматривает список датчиков и температуру", "HTTP/REST")
+Rel(monolith, temp_api, "Опрашивает данные сенсоров", "HTTP/REST")
+@enduml
+
+@startuml Warm-house-system_Context_ToBe
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+' Заголовок диаграммы To-Be
+title Диаграмма контекста (To-Be): SaaS-платформа "Тёплый дом"
+
+' Определяем акторов (пользователей)
+Person(user, "Пользователь", "Клиент SaaS-платформы, владелец умного дома.")
+
+' Определяем нашу систему
+System(warm_house_system, "Платформа 'Тёплый дом'", "SaaS-платформа для управления умными устройствами и сценариями.\n\nВключает домены:\n- Account & Asset Mgmt\n- IoT Platform\n- Automation & Logic")
+
+' Определяем внешние системы
+System_Ext(partner_api, "API партнёров", "Облачные сервисы производителей устройств.")
+System_Ext(physical_devices, "Умные устройства", "Датчики, реле, камеры и другие устройства в доме пользователя.")
+System_Ext(email_service, "Email Service", "Внешний сервис для отправки email-уведомлений (SendGrid, etc).")
+System_Ext(push_service, "Push Notification Service", "Сервисы APNS и FCM для отправки push-уведомлений.")
+
+' Определяем взаимодействия
+Rel(user, warm_house_system, "Управляет устройствами, настраивает сценарии, просматривает телеметрию", "Web / Mobile App")
+
+Rel(warm_house_system, physical_devices, "Получает телеметрию и отправляет команды", "IoT Protocols (MQTT, HTTP)")
+Rel(warm_house_system, partner_api, "Интегрируется для поддержки устройств", "REST API")
+Rel(warm_house_system, email_service, "Отправляет уведомления по email")
+Rel(warm_house_system, push_service, "Отправляет push-уведомления")
+
+@enduml

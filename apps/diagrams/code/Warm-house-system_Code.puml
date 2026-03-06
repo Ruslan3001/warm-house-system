@@ -1,0 +1,90 @@
+@startuml Warm-house-system_Code_Classes
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Диаграмма классов (Code Level): Структура монолита Smart Home
+
+package "Handlers Layer" {
+    class SensorHandler {
+        - DB *db.DB
+        - TemperatureService *services.TemperatureService
+        + NewSensorHandler(db *db.DB, service *services.TemperatureService) *SensorHandler
+        + RegisterRoutes(router *gin.RouterGroup)
+        + GetSensors(c *gin.Context)
+        + GetSensorByID(c *gin.Context)
+        + CreateSensor(c *gin.Context)
+        + UpdateSensor(c *gin.Context)
+        + GetTemperatureByLocation(c *gin.Context)
+    }
+}
+
+package "Services Layer" {
+    class TemperatureService {
+        - BaseURL string
+        - HTTPClient *http.Client
+        + NewTemperatureService(baseURL string) *TemperatureService
+        + GetTemperature(location string) (*TemperatureResponse, error)
+        + GetTemperatureByID(sensorID string) (*TemperatureResponse, error)
+    }
+
+    class TemperatureResponse {
+        + Value float64
+        + Unit string
+        + Timestamp time.Time
+        + Location string
+        + Status string
+    }
+}
+
+package "Data Layer" {
+    class DB {
+        - Pool *pgxpool.Pool
+        + New(connString string) (*DB, error)
+        + GetSensors(ctx context.Context) ([]models.Sensor, error)
+        + GetSensorByID(ctx context.Context, id int) (models.Sensor, error)
+        + CreateSensor(ctx context.Context, s models.SensorCreate) (models.Sensor, error)
+        + UpdateSensor(ctx context.Context, id int, s models.SensorUpdate) (models.Sensor, error)
+    }
+}
+
+SensorHandler --> DB : Uses (Repository Pattern)
+SensorHandler --> TemperatureService : Uses (External Integration)
+TemperatureService ..> TemperatureResponse : Returns
+
+@enduml
+
+@startuml Warm-house-system_Code_Sequence_GetSensors
+title Диаграмма последовательности: Обработка GET /sensors (Проблема N+1)
+
+actor Client
+participant "SensorHandler" as Handler
+participant "Database" as DB
+participant "TemperatureService" as Service
+participant "External API" as ExtAPI
+
+Client -> Handler : GET /sensorsp
+activate Handler
+
+Handler -> DB : GetSensors(ctx)
+activate DB
+DB --> Handler : []Sensor (List)
+deactivate DB
+
+loop For each sensor in list
+    alt Sensor.Type == "temperature"
+        Handler -> Service : GetTemperatureByID(sensor.ID)
+        activate Service
+        Service -> ExtAPI : GET /temperature/{id}
+        activate ExtAPI
+        ExtAPI --> Service : JSON Response
+        deactivate ExtAPI
+        Service --> Handler : TemperatureResponse
+        deactivate Service
+        
+        Handler -> Handler : Update sensor.Value & Status
+    end
+end
+
+Handler --> Client : JSON Response (Updated Sensors)
+deactivate Handler
+
+@enduml

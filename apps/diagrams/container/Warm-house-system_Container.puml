@@ -1,0 +1,77 @@
+@startuml Warm-house-system_Container_AsIs
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+' Заголовок диаграммы As-Is
+title Диаграмма контейнеров (As-Is): Монолитное приложение "Smart Home"
+
+Person(user, "Пользователь", "Владелец дома")
+
+System_Boundary(c1, "Smart Home System") {
+    Container(app, "Smart Home App", "Go, Gin", "Монолитное приложение: API, бизнес-логика, работа с датчиками.")
+    ContainerDb(db, "Database", "PostgreSQL", "Хранит данные о датчиках и истории.")
+}
+
+System_Ext(temp_api, "Temperature API", "Внешний сервис (Mock) для получения данных.")
+
+Rel(user, app, "Использует", "HTTP/JSON")
+Rel(app, db, "Читает/Пишет", "TCP/5432")
+Rel(app, temp_api, "Опрашивает", "HTTP/JSON")
+@enduml
+
+@startuml Warm-house-system_Container_ToBe
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+' Заголовок диаграммы To-Be
+title Диаграмма контейнеров (To-Be): Микросервисная архитектура "Тёплый дом"
+
+Person(user, "Пользователь", "Клиент SaaS-платформы")
+
+System_Boundary(saas_system, "Платформа 'Тёплый дом'") {
+    Container(api_gateway, "API Gateway", "Nginx / Go", "Единая точка входа, маршрутизация, SSL termination.")
+    
+    Container(identity_service, "Identity Service", "Go", "Управление пользователями, аутентификация (JWT).")
+    ContainerDb(identity_db, "Identity DB", "PostgreSQL", "Хранит пользователей и роли.")
+    
+    Container(asset_service, "Asset Service", "Go", "Реестр домов, комнат и устройств.")
+    ContainerDb(asset_db, "Asset DB", "PostgreSQL", "Хранит конфигурацию активов.")
+    
+    Container(device_gateway, "Device Gateway", "Go", "Взаимодействие с устройствами, сбор телеметрии.")
+    ContainerDb(telemetry_db, "Telemetry DB", "TimescaleDB", "Хранит временные ряды (телеметрию).")
+    
+    Container(scenario_service, "Scenario Service", "Go", "Исполнение сценариев автоматизации.")
+    ContainerDb(scenario_db, "Scenario DB", "PostgreSQL", "Хранит правила и сценарии.")
+    
+    Container(notification_service, "Notification Service", "Go", "Отправка уведомлений.")
+    
+    Container(message_broker, "Message Broker", "RabbitMQ / Kafka", "Асинхронный обмен событиями (телеметрия, алерты).")
+}
+
+System_Ext(devices, "Умные устройства", "Физические датчики и реле")
+System_Ext(partner_api, "API партнёров", "Облака производителей")
+System_Ext(email_push, "Email/Push Services", "Внешние провайдеры")
+
+' Взаимодействия пользователя
+Rel(user, api_gateway, "API запросы", "HTTPS/JSON")
+
+' API Gateway маршрутизация
+Rel(api_gateway, identity_service, "Auth & Users", "gRPC/REST")
+Rel(api_gateway, asset_service, "Assets Mgmt", "gRPC/REST")
+Rel(api_gateway, device_gateway, "Device Control", "gRPC/REST")
+Rel(api_gateway, scenario_service, "Scenarios", "gRPC/REST")
+
+' Связи с БД
+Rel(identity_service, identity_db, "SQL", "TCP")
+Rel(asset_service, asset_db, "SQL", "TCP")
+Rel(device_gateway, telemetry_db, "SQL", "TCP")
+Rel(scenario_service, scenario_db, "SQL", "TCP")
+
+' Асинхронное взаимодействие через брокер
+Rel(device_gateway, message_broker, "Публикует телеметрию", "AMQP")
+Rel(scenario_service, message_broker, "Подписан на телеметрию / Публикует команды", "AMQP")
+Rel(notification_service, message_broker, "Подписан на события", "AMQP")
+
+' Внешние связи
+Rel(device_gateway, devices, "MQTT / HTTP", "IoT Protocols")
+Rel(device_gateway, partner_api, "Sync", "HTTP")
+Rel(notification_service, email_push, "Send", "HTTP")
+@enduml

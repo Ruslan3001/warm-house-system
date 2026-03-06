@@ -1,9 +1,3 @@
--- Create the database if it doesn't exist
-CREATE DATABASE smarthome;
-
--- Connect to the database
-\c smarthome;
-
 -- Create the sensors table
 CREATE TABLE IF NOT EXISTS sensors (
     id SERIAL PRIMARY KEY,
@@ -21,3 +15,8 @@ CREATE TABLE IF NOT EXISTS sensors (
 CREATE INDEX IF NOT EXISTS idx_sensors_type ON sensors(type);
 CREATE INDEX IF NOT EXISTS idx_sensors_location ON sensors(location);
 CREATE INDEX IF NOT EXISTS idx_sensors_status ON sensors(status);
+
+-- Добавляем тестовые данные для проверки Задания 5
+INSERT INTO sensors (name, type, location, unit, status) VALUES
+('Living Room Sensor', 'temperature', 'Living Room', 'C', 'online'),
+('Kitchen Sensor', 'temperature', 'Kitchen', 'C', 'online');

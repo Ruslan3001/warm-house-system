@@ -1,0 +1,58 @@
+@startuml Warm-house-system_Component_DeviceGateway
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Диаграмма компонентов: Device Gateway
+
+Container(api_gateway, "API Gateway", "Nginx / Go", "Маршрутизирует запросы.")
+Container(message_broker, "Message Broker", "RabbitMQ / Kafka", "Шина событий.")
+ContainerDb(telemetry_db, "Telemetry DB", "TimescaleDB", "Хранит временные ряды.")
+
+Container_Boundary(device_gateway, "Device Gateway") {
+    Component(mqtt_handler, "MQTT Handler", "Go Paho MQTT", "Поддерживает постоянное соединение с устройствами, принимает телеметрию.")
+    Component(http_handler, "HTTP API Handler", "Gin", "Принимает команды управления от других сервисов.")
+    Component(telemetry_processor, "Telemetry Processor", "Go Service", "Валидирует, дедуплицирует и нормализует данные.")
+    Component(command_processor, "Command Processor", "Go Service", "Преобразует бизнес-команды в протокольные команды устройств.")
+    Component(state_manager, "State Manager", "Go Service", "Отслеживает статус подключения (Online/Offline).")
+    Component(repo, "Repository", "Go / pgx", "Абстракция для работы с БД.")
+}
+
+System_Ext(devices, "Умные устройства", "Физические датчики")
+
+Rel(api_gateway, http_handler, "Отправляет команды", "REST/gRPC")
+Rel(devices, mqtt_handler, "Публикует телеметрию", "MQTT")
+Rel(mqtt_handler, telemetry_processor, "Передает сырые данные")
+Rel(telemetry_processor, repo, "Сохраняет метрики")
+Rel(telemetry_processor, message_broker, "Публикует события телеметрии", "AMQP")
+Rel(http_handler, command_processor, "Запрашивает исполнение команды")
+Rel(command_processor, mqtt_handler, "Отправляет команду на устройство")
+Rel(repo, telemetry_db, "SQL", "TCP")
+@enduml
+
+@startuml Warm-house-system_Component_ScenarioService
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Диаграмма компонентов: Scenario Service
+
+Container(api_gateway, "API Gateway", "Nginx / Go", "Маршрутизирует запросы.")
+Container(message_broker, "Message Broker", "RabbitMQ / Kafka", "Шина событий.")
+ContainerDb(scenario_db, "Scenario DB", "PostgreSQL", "Хранит сценарии и правила.")
+
+Container_Boundary(scenario_service, "Scenario Service") {
+    Component(api_handler, "API Handler", "Gin", "CRUD операции для сценариев.")
+    Component(event_consumer, "Event Consumer", "Go Consumer", "Слушает события телеметрии.")
+    Component(rule_engine, "Rule Engine", "Go Logic", "Вычисляет условия триггеров (If temp < 20).")
+    Component(action_executor, "Action Executor", "Go Service", "Инициирует действия (включить свет).")
+    Component(scenario_manager, "Scenario Manager", "Go Service", "Управляет жизненным циклом сценариев.")
+    Component(repo, "Repository", "Go / pgx", "Работа с БД.")
+}
+
+Rel(api_gateway, api_handler, "Управляет сценариями", "REST")
+Rel(message_broker, event_consumer, "Получает телеметрию", "AMQP")
+Rel(event_consumer, rule_engine, "Передает данные для проверки")
+Rel(api_handler, scenario_manager, "Создает/Обновляет")
+Rel(scenario_manager, repo, "Сохраняет")
+Rel(rule_engine, repo, "Загружает активные правила")
+Rel(rule_engine, action_executor, "Запускает действие при совпадении")
+Rel(action_executor, message_broker, "Публикует команду управления", "AMQP")
+Rel(repo, scenario_db, "SQL", "TCP")
+@enduml
